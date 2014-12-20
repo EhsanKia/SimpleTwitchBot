@@ -1,0 +1,7 @@
+{
+	"channel": "ehsankia",
+	"username": "ehsanbot",
+	"oauth_key": "oauth:lolkswmebx7is0r894xzpy5lufwsl7",
+	"ignore_list": ["nightbot", "moobot"],
+	"owner_list": ["ehsankia"]
+}
