@@ -22,7 +22,6 @@ class TwitchBot(irc.IRCClient):
     channel = "#" + str(CONFIG['channel'])
 
     hosting = False
-    debug = False
     pause = False
     commands = []
 
@@ -93,7 +92,7 @@ class TwitchBot(irc.IRCClient):
         logging.warning(info_msg)
 
     def write(self, msg, debug=False):
-        if not self.debug and not debug:
+        if not debug:
             self.msg(self.channel, msg)
         logging.info("{}: {}".format(self.nickname, msg))
 
@@ -150,9 +149,7 @@ class TwitchBot(irc.IRCClient):
             # Test an command in debug mode
             # Doesn't send the bots reply to channel
             msg = cmd[2:]
-            self.debug = True
-            self.process_command('ehsankia', msg)
-            self.debug = False
+            self.process_command('ehsankia', msg, debug=True)
         elif cmd.startswith("s"):
             # Say something as the bot
             self.write(cmd[2:])
