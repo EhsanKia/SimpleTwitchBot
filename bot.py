@@ -132,8 +132,6 @@ class TwitchBot(irc.IRCClient, object):
     def lineReceived(self, line):
         '''Parse IRC line'''
 
-        print line
-
         # First, we check for any custom twitch commands
         tags, prefix, cmd, args = self.parsemsg(line)
         if cmd == "hosttarget":
@@ -144,6 +142,10 @@ class TwitchBot(irc.IRCClient, object):
             self.notice(tags, args)
         elif cmd == "privmsg":
             self.userState(prefix, tags)
+
+        # Remove tag information
+        if line[0] == "@":
+            line = line.split(' ', 1)[1]
 
         # Then we let IRCClient handle the rest
         super(TwitchBot, self).lineReceived(line)
