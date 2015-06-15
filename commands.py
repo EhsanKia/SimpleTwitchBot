@@ -1,7 +1,6 @@
 from math_parser import NumericStringParser
 from threading import Thread
 import time
-import sex
 import re
 
 

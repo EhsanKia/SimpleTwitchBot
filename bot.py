@@ -24,7 +24,7 @@ class TwitchBot(irc.IRCClient, object):
     password = str(CONFIG['oauth_key'])
     channel = "#" + str(CONFIG['channel'])
 
-    hosting = False
+    host_target = False
     pause = False
     commands = []
 
@@ -132,6 +132,8 @@ class TwitchBot(irc.IRCClient, object):
     def lineReceived(self, line):
         '''Parse IRC line'''
 
+        print line
+
         # First, we check for any custom twitch commands
         tags, prefix, cmd, args = self.parsemsg(line)
         if cmd == "hosttarget":
@@ -150,20 +152,18 @@ class TwitchBot(irc.IRCClient, object):
         '''Track and update hosting status'''
         target = target.split(' ')[0]
         if target == "-":
-            self.hosting = False
             self.host_target = None
             logging.warning("Exited host mode")
         else:
-            self.hosting = True
             self.host_target = target
             logging.warning("Now hosting {}".format(target))
 
     def clearChat(self, channel, target=None):
         '''Log chat clear notices'''
         if target:
-            logging.info("{} was timed out".format(target))
+            logging.warning("{} was timed out".format(target))
         else:
-            logging.info("chat was cleared")
+            logging.warning("chat was cleared")
 
     def notice(self, tags, args):
         '''Log all chat mode changes'''
@@ -189,10 +189,17 @@ class TwitchBot(irc.IRCClient, object):
         name = prefix.split("!")[0]
         self.tags[name].update(tags)
 
-        if 'subscriber' in tags and tags['subscriber'] == '1':
-            self.subs.add(name)
-        elif name in self.subs:
-            self.discard.add(name)
+        if 'subscriber' in tags:
+            if tags['subscriber'] == '1':
+                self.subs.add(name)
+            elif name in self.subs:
+                self.subs.discard(name)
+
+        if 'user-type' in tags:
+            if tags['user-type'] == 'mod':
+                self.mods.add(name)
+            elif name in self.mods:
+                self.mods.discard(name)
 
     def write(self, msg):
         '''Send message to channel and log it'''
@@ -211,8 +218,8 @@ class TwitchBot(irc.IRCClient, object):
 
     def process_command(self, user, msg):
         perm_levels = ['User', 'Subscriber', 'Moderator', 'Owner']
-        msg = msg.strip()
         perm = self.get_permission(user)
+        msg = msg.strip()
         first = True
 
         # Flip through commands and execute the first one that matches
