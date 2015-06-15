@@ -2,7 +2,6 @@ from twisted.words.protocols import irc
 from twisted.internet import reactor
 from collections import defaultdict
 from commands import Permission
-import markov_chain
 import traceback
 import commands
 import logging
@@ -35,7 +34,6 @@ class TwitchBot(irc.IRCClient):
         self.mods = self.factory.mods
         self.subs = self.factory.subs
         self.activity = self.factory.activity
-        self.markov = self.factory.markov
 
         # Load commands
         self.reload_commands()
@@ -139,8 +137,6 @@ class TwitchBot(irc.IRCClient):
             self.terminate()
         elif cmd == 'r': # Reload bot
             self.reload()
-        elif cmd == 'rm': # Reload markov module
-            self.reload_markov()
         elif cmd == 'rc': # Reload commands
             self.reload_commands()
         elif cmd == 'p': # Pause bot
@@ -217,12 +213,6 @@ class TwitchBot(irc.IRCClient):
         logging.warning("Reloading bot!")
         self.close_commands()
         self.quit()
-
-    def reload_markov(self):
-        logging.warning("Reloading markov bot!")
-        NewMarkov = reload(markov_chain).MarkovChat
-        self.factory.markov = NewMarkov()
-        self.markov = self.factory.markov
 
     def terminate(self):
         self.close_commands()
