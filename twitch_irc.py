@@ -1,5 +1,4 @@
 from twisted.internet import protocol, reactor
-from markov_chain import MarkovChat
 
 import bot
 import time
@@ -15,7 +14,6 @@ class BotFactory(protocol.ClientFactory):
     subs = set()
     users = set()
     activity = dict()
-    markov = MarkovChat()
     wait_time = 1
 
     def clientConnectionLost(self, connector, reason):

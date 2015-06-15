@@ -212,7 +212,6 @@ class TwitchBot(irc.IRCClient):
             cmds.Calculator(self),
             cmds.Timer(self),
             cmds.Sex(self),
-            cmds.MarkovLog(self),
         ]
 
     def reload(self):
