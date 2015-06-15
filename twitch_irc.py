@@ -1,4 +1,5 @@
 from twisted.internet import protocol, reactor
+from collections import defaultdict
 
 import bot
 import time
@@ -10,9 +11,7 @@ logging.config.fileConfig('logging.conf')
 class BotFactory(protocol.ClientFactory):
     protocol = bot.TwitchBot
 
-    mods = set()
-    subs = set()
-    users = set()
+    tags = defaultdict(dict)
     activity = dict()
     wait_time = 1
 

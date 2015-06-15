@@ -2,17 +2,21 @@ from twisted.words.protocols import irc
 from twisted.internet import reactor
 from collections import defaultdict
 from commands import Permission
+from threading import Thread
 import traceback
 import commands
+import requests
 import logging
 import signal
 import json
 import time
 
+USERLIST_API = "http://tmi.twitch.tv/group/user/{}/chatters"
 with open('bot_config.json') as fp:
     CONFIG = json.load(fp)
 
-class TwitchBot(irc.IRCClient):
+
+class TwitchBot(irc.IRCClient, object):
     last_warning = defaultdict(int)
     owner_list = CONFIG['owner_list']
     ignore_list = CONFIG['ignore_list']
@@ -30,16 +34,24 @@ class TwitchBot(irc.IRCClient):
 
         signal.signal(signal.SIGINT, self.manual_action)
 
+        # When first starting, get user list
+        url = USERLIST_API.format(self.channel[1:])
+        data = requests.get(url).json()
+        self.users = set(sum(data['chatters'].values(), []))
+        self.mods = set()
+        self.subs = set()
+
         # Get data structures stored in factory
-        self.mods = self.factory.mods
-        self.subs = self.factory.subs
         self.activity = self.factory.activity
+        self.tags = self.factory.tags
 
         # Load commands
         self.reload_commands()
 
         # Join channel
-        self.sendLine("TWITCHCLIENT 3")
+        self.sendLine("CAP REQ :twitch.tv/membership")
+        self.sendLine("CAP REQ :twitch.tv/commands")
+        self.sendLine("CAP REQ :twitch.tv/tags")
         self.join(self.channel)
 
     def joined(self, channel):
@@ -61,9 +73,6 @@ class TwitchBot(irc.IRCClient):
         if name in self.ignore_list:
             return
 
-        print channel
-        print self.channel
-
         # Ignore message sent to wrong channel
         if channel != self.channel:
             return
@@ -78,7 +87,8 @@ class TwitchBot(irc.IRCClient):
         self.activity[name] = time.time()
 
     def modeChanged(self, user, channel, added, modes, args):
-        if channel != self.channel: return
+        if channel != self.channel:
+            return
 
         # Keep mod list up to date
         func = 'add' if added else 'discard'
@@ -89,9 +99,104 @@ class TwitchBot(irc.IRCClient):
         info_msg = "Mod {}: {}".format(change, ', '.join(args))
         logging.warning(info_msg)
 
-    def write(self, msg, debug=False):
-        if not debug:
-            self.msg(self.channel, msg)
+    def userJoined(self, user, channel):
+        '''Update userlist when user joins'''
+        if channel == self.channel:
+            self.users.add(user)
+
+    def userLeft(self, user, channel):
+        '''Update userlist when user leaves'''
+        if channel == self.channel:
+            self.users.discard(user)
+
+    def parsemsg(self, s):
+        """Breaks a message from an IRC server into its prefix, command, and arguments."""
+        tags = {}
+        prefix = ''
+        trailing = []
+        if s[0] == '@':
+            tags_str, s = s[1:].split(' ', 1)
+            tag_list = tags_str.split(';')
+            tags = dict(t.split('=') for t in tag_list)
+        if s[0] == ':':
+            prefix, s = s[1:].split(' ', 1)
+        if s.find(' :') != -1:
+            s, trailing = s.split(' :', 1)
+            args = s.split()
+            args.append(trailing)
+        else:
+            args = s.split()
+        command = args.pop(0).lower()
+        return tags, prefix, command, args
+
+    def lineReceived(self, line):
+        '''Parse IRC line'''
+
+        # First, we check for any custom twitch commands
+        tags, prefix, cmd, args = self.parsemsg(line)
+        if cmd == "hosttarget":
+            self.hostTarget(*args)
+        elif cmd == "clearchat":
+            self.clearChat(*args)
+        elif cmd == "notice":
+            self.notice(tags, args)
+        elif cmd == "privmsg":
+            self.userState(prefix, tags)
+
+        # Then we let IRCClient handle the rest
+        super(TwitchBot, self).lineReceived(line)
+
+    def hostTarget(self, channel, target):
+        '''Track and update hosting status'''
+        target = target.split(' ')[0]
+        if target == "-":
+            self.hosting = False
+            self.host_target = None
+            logging.warning("Exited host mode")
+        else:
+            self.hosting = True
+            self.host_target = target
+            logging.warning("Now hosting {}".format(target))
+
+    def clearChat(self, channel, target=None):
+        '''Log chat clear notices'''
+        if target:
+            logging.info("{} was timed out".format(target))
+        else:
+            logging.info("chat was cleared")
+
+    def notice(self, tags, args):
+        '''Log all chat mode changes'''
+        if "msg-id" not in tags:
+            return
+
+        msg_id = tags['msg-id']
+        if msg_id == "subs_on":
+            logging.warning("Subonly mode ON")
+        elif msg_id == "subs_off":
+            logging.warning("Subonly mode OFF")
+        elif msg_id == "slow_on":
+            logging.warning("Slow mode ON")
+        elif msg_id == "slow_off":
+            logging.warning("Slow mode OFF")
+        elif msg_id == "r9k_on":
+            logging.warning("R9K mode ON")
+        elif msg_id == "r9k_off":
+            logging.warning("R9K mode OFF")
+
+    def userState(self, prefix, tags):
+        '''Track user tags'''
+        name = prefix.split("!")[0]
+        self.tags[name].update(tags)
+
+        if 'subscriber' in tags and tags['subscriber'] == '1':
+            self.subs.add(name)
+        elif name in self.subs:
+            self.discard.add(name)
+
+    def write(self, msg):
+        '''Send message to channel and log it'''
+        self.msg(self.channel, msg)
         logging.info("{}: {}".format(self.nickname, msg))
 
     def get_permission(self, user):
@@ -116,7 +221,8 @@ class TwitchBot(irc.IRCClient):
         for cmd in self.commands:
             try:
                 match = cmd.match(self, user, msg)
-                if not match or not first: continue
+                if not match or not first:
+                    continue
                 cname = cmd.__class__.__name__
                 if perm < cmd.perm:
                     if time.time() - self.last_warning[cname] < 60:
@@ -130,50 +236,35 @@ class TwitchBot(irc.IRCClient):
             except:
                 logging.error(traceback.format_exc())
 
-
     def manual_action(self, *args):
         cmd = raw_input("Command: ").strip()
-        if cmd == "q": # Stop bot
+        if cmd == "q":  # Stop bot
             self.terminate()
-        elif cmd == 'r': # Reload bot
+        elif cmd == 'r':  # Reload bot
             self.reload()
-        elif cmd == 'rc': # Reload commands
+        elif cmd == 'rc':  # Reload commands
             self.reload_commands()
-        elif cmd == 'p': # Pause bot
+        elif cmd == 'p':  # Pause bot
             self.pause = not self.pause
-        elif cmd.startswith("t"):
-            # Test an command in debug mode
-            # Doesn't send the bots reply to channel
-            msg = cmd[2:]
-            self.process_command('ehsankia', msg, debug=True)
+        elif cmd == 'd':  # try to enter debug mode
+            IPythonThread(self).start()
         elif cmd.startswith("s"):
             # Say something as the bot
             self.write(cmd[2:])
 
     def jtv_command(self, msg):
-        # Log commands that aren't in those
-        IGNORED = ["USERCOLOR", "EMOTESET", "SPECIALUSER", "HISTORYEND"]
-        if not any(map(msg.startswith, IGNORED)):
-            logging.debug(msg)
-
-        if msg.startswith('SPECIALUSER'):
-            # Track subscibers in chat
-            cmd, name, arg = msg.split()
-            if arg == "subscriber":
-                self.subs.add(name)
-        elif "subscribed" in msg:
+        if "subscribed" in msg:
             # Someone subscribed
-            name = msg[:-17]
-            reply = "Thanks for subbing {}!"
-            self.write(reply.format(name))
-        elif "Now hosting" in msg:
-            # Entered host mode
-            self.hostTarget = msg[12:-1]
-            self.hosting = True
-        elif "Exited host" in msg:
-            # Exited host mode
-            self.hostTarget = None
-            self.hosting = False
+            logging.warning(msg)
+
+            reply = "Thanks for subbing!"
+            if " just subscribed" in msg:
+                user = msg.split(' just ')[0]
+                reply = "{}: {}".format(user, reply)
+            elif " subscribed for" in msg:
+                user = msg.split(" subscribed for")[0]
+                reply = "{}: {}".format(user, reply)
+            self.write(reply)
 
     def get_active_users(self, t=60*10):
         ''' Returns list of users active in chat in
@@ -217,3 +308,18 @@ class TwitchBot(irc.IRCClient):
     def terminate(self):
         self.close_commands()
         reactor.stop()
+
+
+class IPythonThread(Thread):
+    def __init__(self, b):
+        Thread.__init__(self)
+        self.bot = b
+
+    def run(self):
+        try:
+            from IPython import embed
+            bot = self.bot
+            embed()
+            del bot
+        except ImportError:
+            logging.error("IPython not installed, cannot debug.")
