@@ -211,7 +211,6 @@ class TwitchBot(irc.IRCClient):
             cmds.SimpleReply(self),
             cmds.Calculator(self),
             cmds.Timer(self),
-            cmds.Sex(self),
         ]
 
     def reload(self):

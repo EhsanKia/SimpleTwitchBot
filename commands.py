@@ -109,39 +109,6 @@ class Calculator(Command):
             bot.write("{} = ???".format(expr))
 
 
-class Sex(Command):
-    '''A command to generate lude interactions between users'''
-
-    HELP = "Usage: !sex [user A] [user B] (Other commands: !gaysex !lesbosex)"
-    perm = Permission.Subscriber
-
-    def match(self, bot, user, msg):
-        if msg.startswith("!sex"):
-            return True
-        if msg.startswith("!gaysex"):
-            return True
-        if msg.startswith("!lesbosex"):
-            return True
-        return False
-
-    def run(self, bot, user, msg):
-        types = ["!gaysex", "!sex", "!lesbosex"]
-        parts = filter(None, msg.split(' '))
-        t = types.index(parts[0].lower())
-
-        if len(parts) == 1:
-            reply = sex.sexytime(stype=t)
-        elif len(parts) == 2:
-            if parts[1].lower() == "help":
-                reply = self.HELP
-            else:
-                reply = sex.sexytime(subject1=parts[1], stype=t)
-        else:
-            reply = sex.sexytime(subject1=parts[1], subject2=parts[2], stype=t)
-
-        bot.write(reply)
-
-
 class General(Command):
     '''Some miscellaneous commands in here'''
     perm = Permission.User
