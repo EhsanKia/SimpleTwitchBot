@@ -325,6 +325,9 @@ class IPythonThread(Thread):
         self.bot = b
 
     def run(self):
+        logger = logging.getLogger()
+        handler = logger.handlers[0]
+        handler.setLevel(logging.ERROR)
         try:
             from IPython import embed
             bot = self.bot
@@ -332,3 +335,4 @@ class IPythonThread(Thread):
             del bot
         except ImportError:
             logging.error("IPython not installed, cannot debug.")
+        handler.setLevel(logging.INFO)
