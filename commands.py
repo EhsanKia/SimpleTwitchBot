@@ -136,7 +136,6 @@ class General(Command):
 
 class Timer(Command):
     '''Sets a timer that will alert you when it runs out'''
-
     perm = Permission.Moderator
 
     def match(self, bot, user, msg):
@@ -155,7 +154,9 @@ class Timer(Command):
             t = float(d) * (60 if u == 'm' else 1)
             thread = TimerThread(bot, user, t)
             thread.start()
-            bot.write("{}: Timer started...".format(user))
+        elif arg.isdigit():
+            thread = TimerThread(bot, user, int(arg) * 60)
+            thread.start()
         else:
             bot.write("{}: Invalid argument".format(user))
 
@@ -165,9 +166,19 @@ class TimerThread(Thread):
         Thread.__init__(self)
         self.bot = b
         self.user = u
-        self.time = t
+        self.time = int(t)
 
     def run(self):
+        secs = self.time % 60
+        mins = self.time / 60
+
+        msg = "{}: Timer started for".format(self.user)
+        if mins > 0:
+            msg += " {}m".format(mins)
+        if secs > 0:
+            msg += " {}s".format(secs)
+
+        self.bot.write(msg)
         time.sleep(self.time)
         self.bot.write("{}: Time is up!".format(self.user))
 
