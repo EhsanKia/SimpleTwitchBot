@@ -5,6 +5,8 @@ This is a basic implementation of a Twitch IRC Bot coded in Python.
 It contains most of the gory specifics needed to interact with Twitch chat.
 I've included a couple basic commands as examples, but this is intended to just be a skeleton and not a fully featured bot.
 
+If you want something even more barebone than this, checkout [BareboneTwitchBot](https://github.com/EhsanKia/SimpleTwitchBot).
+
 # Installation and usage
 All you should need is Pyhton 2.7+ with [Twisted](https://twistedmatrix.com/trac/) installed.
 You then copy this project in a folder, configure the bot and run `twitch_irc.py`.
