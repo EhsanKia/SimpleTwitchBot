@@ -65,8 +65,5 @@ By default, it's only invoked with "!chat" or "!chat about <context>" commands, 
 `chattiness` parameter in the file to a small fraction like 0.01 to have it randomly reply to people.
 It usually needs a couple hundred lines of chat to really start becoming effective.
 
-#####`sex.py`
-A quick command for generating dirty interactions between users. Nothing special. Inspired from RBot.
-
 # Contact
 If you have any extra questions about the code, you can send me a PM on twitch: @ehsankia
